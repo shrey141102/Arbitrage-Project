@@ -1,0 +1,8 @@
+Test,Empirical_Metric,Criterion,Verdict
+S1: Heavy-Tailed Profit (Ito 2012),"Kurt=108.1, alpha=1.18",D_ln < D_norm,PASS
+S2: Window Half-Life (Fenn 2009),"t_1/2=1094ms, R^2=0.907",R^2 > 0.90,PASS
+S3: Intraday Clustering (Kozhan 2012),"Chi2=1,234,856",p < 0.001,PASS
+S4: Latency Decay Monotonicity,Spearman rho = -1.000,Strictly Non-Increasing,PASS
+S5: Fee Sensitivity Monotonicity,Spearman rho = -1.000,Strictly Non-Increasing,PASS
+S6: Bootstrap Temporal Significance,Z = +174.4,Real > 95th Pctl Null,PASS
+S7: Walk-Forward Stability (5 Epochs),5/5 Epochs Profitable,Consistent Sign,PASS

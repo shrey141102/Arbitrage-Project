@@ -1,0 +1,9 @@
+Triangle,fee_0.0_bps_leg,fee_0.1_bps_leg,fee_0.2_bps_leg,fee_0.3_bps_leg,fee_0.5_bps_leg
+EUR->JPY->USD->EUR,1550 ms,550 ms,50 ms,0 ms,0 ms
+CHF->JPY->USD->CHF,1150 ms,350 ms,50 ms,0 ms,0 ms
+EUR->JPY->GBP->EUR,450 ms,50 ms,0 ms,0 ms,0 ms
+EUR->GBP->USD->EUR,1050 ms,50 ms,0 ms,0 ms,0 ms
+CAD->USD->JPY->CAD,3050 ms,450 ms,50 ms,0 ms,0 ms
+CAD->JPY->USD->CAD,1650 ms,550 ms,50 ms,0 ms,0 ms
+CHF->USD->EUR->CHF,250 ms,50 ms,0 ms,0 ms,0 ms
+CHF->JPY->EUR->CHF,50 ms,50 ms,0 ms,0 ms,0 ms
