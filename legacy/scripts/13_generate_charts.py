@@ -1,4 +1,6 @@
 from pathlib import Path
+from itertools import permutations
+import time
 import polars as pl
 import matplotlib.pyplot as plt
 import numpy as np
@@ -14,8 +16,63 @@ plt.rcParams["axes.edgecolor"] = "#333333"
 plt.rcParams["axes.linewidth"] = 1.0
 plt.rcParams["figure.dpi"] = 300
 
+
+def benchmark_algorithms_live(vertex_count: int, n_iters: int = 2000):
+    rng = np.random.default_rng(42)
+    weights = rng.uniform(-0.0005, 0.001, size=(vertex_count, vertex_count))
+    np.fill_diagonal(weights, 0.0)
+    edges = [
+        (u, v, float(weights[u, v]))
+        for u in range(vertex_count)
+        for v in range(vertex_count)
+        if u != v
+    ]
+
+    start = time.perf_counter()
+    for _ in range(n_iters):
+        distances = [0.0] * vertex_count
+        for _ in range(vertex_count - 1):
+            updated = False
+            for u, v, weight in edges:
+                if distances[u] + weight < distances[v] - 1e-12:
+                    distances[v] = distances[u] + weight
+                    updated = True
+            if not updated:
+                break
+    bellman_ford_ms = (time.perf_counter() - start) / n_iters * 1000.0
+
+    brute_force_ms = []
+    permutation_counts = []
+    for cycle_length in (3, 4, 5):
+        cycles = list(permutations(range(vertex_count), cycle_length))
+        permutation_counts.append(len(cycles))
+        start = time.perf_counter()
+        for _ in range(n_iters):
+            for cycle in cycles:
+                sum(weights[cycle[i], cycle[(i + 1) % cycle_length]] for i in range(cycle_length))
+        brute_force_ms.append((time.perf_counter() - start) / n_iters * 1000.0)
+    return [bellman_ford_ms] * 3, brute_force_ms, permutation_counts
+
+
 def generate_standalone_charts():
     by_cycle = pl.read_csv(DATA_DIR / "summary_by_triangle.csv").head(8)
+    signals = pl.scan_parquet(DATA_DIR / "all_discovered_arbitrage_signals.parquet")
+    windows = pl.read_parquet(DATA_DIR / "all_distinct_windows.parquet")
+    total_raw_signals = signals.select(pl.len()).collect().item()
+    total_institutional_signals = (
+        signals.filter(pl.col("institutional_net_bps") > 0.0)
+        .select(pl.len())
+        .collect()
+        .item()
+    )
+    total_windows = windows.height
+    windows_over_one_second = windows.filter(pl.col("duration_ms") > 1000).height
+    counts = [
+        total_raw_signals,
+        total_institutional_signals,
+        total_windows,
+        windows_over_one_second,
+    ]
     
     # -------------------------------------------------------------
     # CHART 1: The Microstructure & De-Clustering Funnel
@@ -27,7 +84,6 @@ def generate_standalone_charts():
         "De-Clustered\nIndependent Windows",
         "Windows Lasting\n> 1.0 Second"
     ]
-    counts = [15_487_220, 6_568_432, 558_856, int(558_856 * (1 - 0.7055))]
     colors = ["#4C72B0", "#2b5c8f", "#55A868", "#C44E52"]
     
     bars = ax.bar(stages, counts, color=colors, width=0.5)
@@ -41,7 +97,7 @@ def generate_standalone_charts():
             bar.get_x() + bar.get_width() / 2, c * 1.15,
             f"{c:,}", ha="center", va="bottom", fontsize=11, fontweight="bold"
         )
-    ax.set_ylim(1e4, 5e7)
+    ax.set_ylim(max(min(counts) * 0.2, 1), max(counts) * 3.5)
     plt.tight_layout()
     out1 = FIGURES_DIR / "chart_1_funnel.png"
     plt.savefig(out1)
@@ -77,13 +133,33 @@ def generate_standalone_charts():
     # CHART 3: Arbitrage Window Half-Life / Duration Distribution
     # -------------------------------------------------------------
     fig, ax = plt.subplots(figsize=(10, 6))
-    dur_buckets = ["100 ms\n(Single Tick)", "200–400 ms\n(Median = 400ms)", "500–1000 ms\n(Sub-Second)", "> 1000 ms\n(> 1 Second)"]
-    bucket_pcts = [35.05, 18.45, 17.05, 29.45]
+    if total_windows == 0:
+        raise ValueError("Cannot build duration chart: no independent windows were found.")
+    bucket_counts = [
+        windows.filter(pl.col("duration_ms") == 100).height,
+        windows.filter(pl.col("duration_ms").is_between(200, 400)).height,
+        windows.filter(pl.col("duration_ms").is_between(500, 1000)).height,
+        windows_over_one_second,
+    ]
+    bucket_pcts = [count / total_windows * 100.0 for count in bucket_counts]
+    median_duration_ms = int(windows["duration_ms"].median())
+    dur_buckets = [
+        "100 ms\n(Single Tick)",
+        f"200–400 ms\n(Median = {median_duration_ms}ms)",
+        "500–1000 ms\n(Sub-Second)",
+        "> 1000 ms\n(> 1 Second)",
+    ]
     b_colors = ["#C44E52", "#DD8452", "#CCB974", "#4C72B0"]
     
     bars3 = ax.bar(dur_buckets, bucket_pcts, color=b_colors, width=0.55)
-    ax.set_title("C. Arbitrage Window Duration Half-Life (70.55% Vanish in ≤ 1.0s)", fontsize=14, fontweight="bold", pad=15)
-    ax.set_ylabel("Share of 558,856 Independent Windows (%)", fontsize=12)
+    ax.set_title(
+        f"C. Arbitrage Window Duration Half-Life "
+        f"({100.0 - bucket_pcts[-1]:.2f}% Vanish in ≤ 1.0s)",
+        fontsize=14,
+        fontweight="bold",
+        pad=15,
+    )
+    ax.set_ylabel(f"Share of {total_windows:,} Independent Windows (%)", fontsize=12)
     ax.grid(axis="y", linestyle="--", alpha=0.5)
     
     for bar, pct in zip(bars3, bucket_pcts):
@@ -91,7 +167,7 @@ def generate_standalone_charts():
             bar.get_x() + bar.get_width() / 2, pct + 1.0,
             f"{pct:.2f}%", ha="center", va="bottom", fontsize=11, fontweight="bold"
         )
-    ax.set_ylim(0, 42)
+    ax.set_ylim(0, max(bucket_pcts) * 1.2)
     plt.tight_layout()
     out3 = FIGURES_DIR / "chart_3_halflife.png"
     plt.savefig(out3)
@@ -102,9 +178,11 @@ def generate_standalone_charts():
     # CHART 4: Algorithmic Complexity (Bellman-Ford vs Brute Force)
     # -------------------------------------------------------------
     fig, ax = plt.subplots(figsize=(10, 6))
-    k_labels = ["k = 3 (3-Hop Triangle)\n(60 permutations)", "k = 4 (4-Hop Quad)\n(120 permutations)", "k = 5 (5-Hop Pentagon)\n(120 permutations)"]
-    brute_times = [0.0089, 0.0177, 0.0180]
-    bf_times = [0.0009, 0.0009, 0.0009]
+    bf_times, brute_times, permutation_counts = benchmark_algorithms_live(5)
+    k_labels = [
+        f"k = {k} ({label}-Hop)\n({count} permutations)"
+        for k, label, count in zip((3, 4, 5), ("3", "4", "5"), permutation_counts)
+    ]
     x = np.arange(len(k_labels))
     w = 0.35
     
@@ -118,8 +196,8 @@ def generate_standalone_charts():
     ax.grid(axis="y", linestyle="--", alpha=0.5)
     
     for i, (b, bf) in enumerate(zip(brute_times, bf_times)):
-        ax.text(i - w/2, b + 0.0005, f"{b/bf:.1f}x slower", ha="center", fontsize=10, fontweight="bold")
-    ax.set_ylim(0, 0.022)
+        ax.text(i - w/2, b * 1.03, f"{b/bf:.1f}x slower", ha="center", fontsize=10, fontweight="bold")
+    ax.set_ylim(0, max(brute_times) * 1.25)
     plt.tight_layout()
     out4 = FIGURES_DIR / "chart_4_scaling.png"
     plt.savefig(out4)

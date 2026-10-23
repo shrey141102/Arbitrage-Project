@@ -1,0 +1,10 @@
+polars>=1.0
+numpy>=2.0
+matplotlib>=3.8
+ipython
+jupyter
+ipykernel
+
+# optional: only needed to download the raw data from Kaggle
+# kaggle
+# requests

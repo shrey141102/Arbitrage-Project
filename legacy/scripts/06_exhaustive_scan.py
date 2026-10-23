@@ -1,4 +1,5 @@
 import time
+import re
 from pathlib import Path
 from itertools import combinations
 import polars as pl
@@ -6,17 +7,6 @@ import polars as pl
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 KAGGLE_DIR = DATA_DIR / "kaggle"
-
-# All pairs present in your Kaggle folders
-TARGET_PAIRS = [
-    "EURUSD", "GBPUSD", "USDJPY", "USDCHF", "AUDUSD", "NZDUSD", "USDCAD",
-    "EURGBP", "EURJPY", "EURCHF", "EURAUD", "EURNZD", "EURCAD", "EURPLN",
-    "GBPJPY", "GBPCHF", "GBPAUD", "GBPNZD", "GBPCAD",
-    "CHFJPY", "AUDJPY", "NZDJPY", "CADJPY",
-    "AUDCHF", "AUDNZD", "AUDCAD",
-    "USDMXN", "USDRUB", "USDTRY", "USDZAR"
-]
-
 
 def discover_month_folders(kaggle_dir: Path) -> list[Path]:
     """
@@ -35,17 +25,15 @@ def discover_month_folders(kaggle_dir: Path) -> list[Path]:
 
 def map_csvs_in_folder(month_folder: Path) -> dict[str, Path]:
     """
-    Recursively searches inside month_folder (e.g., April2020/AUDJPY-2020-04/*.csv)
-    to map each pair to its CSV file for that specific month.
+    Extracts six-letter ISO FX pair names from CSV filenames.
     """
     found = {}
     for p in month_folder.rglob("*"):
         if p.is_file() and p.suffix.lower() == ".csv":
             clean = p.name.upper().replace("/", "").replace("-", "").replace("_", "")
-            for pair in TARGET_PAIRS:
-                if pair in clean:
-                    found[pair] = p
-                    break
+            match = re.search(r"([A-Z]{6})", clean)
+            if match:
+                found[match.group(1)] = p
     return found
 
 
@@ -92,7 +80,8 @@ def find_valid_triangles(active_pairs: list[str]) -> list[tuple[str, list]]:
             p1r, d1r = get_pair_and_dir(a, c)
             p2r, d2r = get_pair_and_dir(c, b)
             p3r, d3r = get_pair_and_dir(b, a)
-            triangles.append((f"{a}->{c}->{b}->{a}", [(p1r, d1r), (p2r, d2r), (p3r, d3r)]))
+            if p1r and p2r and p3r:
+                triangles.append((f"{a}->{c}->{b}->{a}", [(p1r, d1r), (p2r, d2r), (p3r, d3r)]))
 
     return triangles
 

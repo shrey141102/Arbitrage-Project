@@ -60,17 +60,66 @@ def run_all_7_demos():
     # DEMO 1 & DEMO 3: Real Kaggle Shock Spread Decomposition & Cost Waterfall
     # =========================================================================
     print("[Demo 1 & Demo 3] Extracting real Kaggle shock ticks (EUR->JPY->USD->EUR) for Spread Decomposition & Cost Waterfall...")
-    # Calibrate empirical spread tax from March 2022 EUR-JPY-USD triangle
-    # Typical total 3-leg half-spread tax in EUR-JPY-USD is ~1.36 bps (0.45 + 0.44 + 0.47 bps)
-    spread_tax_bps = 1.36
-    # Use 95th percentile institutional event on EUR->JPY->USD->EUR (+2.86 bps net -> +3.16 bps raw -> +4.52 bps mid-price)
-    gross_mid_bps = 4.52
-    after_spread_bps = gross_mid_bps - spread_tax_bps               # +3.16 bps (Raw Executable Bid/Ask)
-    after_fee_bps = after_spread_bps - 0.30                         # +2.86 bps (After 0.10 bps/leg ECN fee)
-    # Almgren-Chriss square-root market impact slippage (~0.41 bps for $10M clip)
-    after_slippage_bps = after_fee_bps - 0.41                       # +2.45 bps
-    after_100ms_lat_bps = after_slippage_bps * 0.78                 # +1.91 bps (100ms latency decay)
-    after_1000ms_lat_bps = -0.45                                    # -0.45 bps (1,000ms latency adverse selection loss)
+    target_cycle = "EUR->JPY->USD->EUR"
+    target_signals = inst_df.filter(pl.col("cycle") == target_cycle)
+    target_windows = win_df.filter(pl.col("cycle") == target_cycle)
+    if target_signals.height == 0:
+        raise ValueError(f"No institutional signals found for {target_cycle}.")
+    if target_windows.height == 0:
+        raise ValueError(f"No independent windows found for {target_cycle}.")
+
+    m22_folder = KAGGLE_DIR / "March2022"
+    spread_taxes = []
+    for pair in ("EURJPY", "USDJPY", "EURUSD"):
+        pair_df = load_pair_window(
+            m22_folder,
+            pair,
+            "20220301 08:00:",
+            "20220301 16:00:",
+        )
+        if pair_df.height == 0:
+            raise FileNotFoundError(
+                f"No March2022 quote data found for {pair} in {m22_folder}."
+            )
+        spread_taxes.append(
+            float(
+                (
+                    (pair_df[f"{pair}_ask"] - pair_df[f"{pair}_bid"])
+                    / (2.0 * pair_df[f"{pair}_bid"])
+                    * 1e4
+                ).median()
+            )
+        )
+
+    spread_tax_bps = float(np.sum(spread_taxes))
+    after_fee_bps = float(target_signals["institutional_net_bps"].quantile(0.95))
+    ecn_fee_bps = float(
+        (
+            target_signals["raw_bid_ask_bps"]
+            - target_signals["institutional_net_bps"]
+        ).median()
+    )
+    after_spread_bps = after_fee_bps + ecn_fee_bps
+    gross_mid_bps = after_spread_bps + spread_tax_bps
+
+    empirical_sigma_bps = float(target_signals["raw_bid_ask_bps"].std())
+    slippage_bps = (
+        0.15 * math.sqrt(10.0 / 5.0) * (empirical_sigma_bps / 2.0)
+    )
+    after_slippage_bps = after_fee_bps - slippage_bps
+
+    durations_ms = target_windows["duration_ms"].to_numpy()
+    survival_100ms = float(np.mean(durations_ms > 100))
+    survival_1000ms = float(np.mean(durations_ms > 1000))
+    adverse_selection_bps = -spread_tax_bps / 3.0
+    after_100ms_lat_bps = (
+        survival_100ms * after_slippage_bps
+        + (1.0 - survival_100ms) * adverse_selection_bps
+    )
+    after_1000ms_lat_bps = (
+        survival_1000ms * after_slippage_bps
+        + (1.0 - survival_1000ms) * adverse_selection_bps
+    )
 
     # =========================================================================
     # DEMO 1: Cost Waterfall Chart (Standalone Figure)
@@ -78,9 +127,9 @@ def run_all_7_demos():
     fig1, ax1 = plt.subplots(figsize=(9, 6), dpi=300)
     stages = [
         "1. Mid-Price\nIllusion",
-        "2. After Bid/Ask\nSpread (-1.36)",
-        "3. After ECN Fee\n(-0.30 bps)",
-        "4. After Sqrt\nSlippage (-0.41)",
+        f"2. After Bid/Ask\nSpread (-{spread_tax_bps:.2f})",
+        f"3. After ECN Fee\n(-{ecn_fee_bps:.2f} bps)",
+        f"4. After Sqrt\nSlippage (-{slippage_bps:.2f})",
         "5. After 100ms\nLatency",
         "6. After 1.0s\nLatency (Loss)"
     ]
@@ -193,14 +242,16 @@ def run_all_7_demos():
     delays_ms = np.array([0, 100, 200, 300, 400, 500, 750, 1000, 1500, 2000])
     win_dur = win_df["duration_ms"].to_numpy()
     win_avg = win_df["avg_net_bps"].to_numpy()
+    adverse_selection_bps = -spread_tax_bps / 3.0
 
     surv_counts = []
     expected_bps_per_attempt = []
     for d_ms in delays_ms:
         alive = win_dur > d_ms
         surv_counts.append(np.sum(alive) / 1e3)
-        # If window survives at d_ms, trader captures avg_net_bps; else loses 1 half-spread (-0.45 bps)
-        realized = np.where(alive, win_avg, -0.45)
+        # If a window survives, capture its empirical return; otherwise apply
+        # the data-derived adverse-selection loss.
+        realized = np.where(alive, win_avg, adverse_selection_bps)
         expected_bps_per_attempt.append(float(np.mean(realized)))
 
     c_left = "#2b5c8f"

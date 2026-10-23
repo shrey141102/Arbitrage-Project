@@ -1,0 +1,9 @@
+stage,count,pct_of_states
+Decision states,36292507,100.0
+… naive mid shows a profitable cycle,35642984,98.21031101543907
+… executable bid/ask profitable (gross),1987003,5.474967601439052
+"… every leg ≤ 2,000 ms old",1794091,4.943419863499647
+… still > 0 after fees,658678,1.8149145772707296
+… net edge > θ = 1.0 bps,541,0.001490665828072996
+"… after the 1,000 ms cool-down = TRADES",302,0.0008321276896082158
+… profitable after 100 ms latency and fees,143,0.0003940207271985922

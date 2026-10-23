@@ -1,5 +1,6 @@
 import math
 import time
+from datetime import datetime
 from pathlib import Path
 import numpy as np
 import polars as pl
@@ -90,7 +91,11 @@ def run_statistical_suite():
     print("[S2] ARBITRAGE WINDOW HALF-LIFE REGRESSION (Fenn et al., 2009)")
     print(f"     Unbiased Window Population            : {total_w:,} independent windows")
     print(f"     Exponential Relaxation Time (tau)     : {tau_ms:.1f} ms")
-    print(f"     Fitted Exponential Half-Life (t_1/2)  : {half_life_ms:.1f} ms (Empirical Median = 400 ms)")
+    empirical_median_ms = float(np.median(durations))
+    print(
+        f"     Fitted Exponential Half-Life (t_1/2)  : "
+        f"{half_life_ms:.1f} ms (Empirical Median = {empirical_median_ms:.0f} ms)"
+    )
     print(f"     Goodness-of-Fit (R^2)                 : R^2 = {r_squared:.4f}")
     print(f"     Verdict                               : PASS (Sub-second exponential decay confirmed)\n")
     results_summary.append(("S2: Window Half-Life (Fenn 2009)", f"t_1/2={half_life_ms:.0f}ms, R^2={r_squared:.3f}", "R^2 > 0.90", "PASS"))
@@ -199,14 +204,11 @@ def run_statistical_suite():
     # -------------------------------------------------------------------------
     # TEST S7: Walk-Forward Out-of-Sample Regime Stability (5 Rolling Epochs)
     # -------------------------------------------------------------------------
-    chronological_months = [
-        "April2020", "May2020", "June2020", "July2020", "August2020", "September2020",
-        "October2020", "November2020", "December2020", "January2021", "February2021", "March2021",
-        "April2021", "May2021", "June2021", "July2021", "August2021", "September2021",
-        "October2021", "November2021", "December2021", "January2022", "February2022", "March2022",
-        "April2022", "May2022", "June2022", "July2022", "August2022"
-    ]
     monthly_df = pl.read_csv(MONTHLY_FILE)
+    chronological_months = sorted(
+        monthly_df["folder"].to_list(),
+        key=lambda month: datetime.strptime(month, "%B%Y"),
+    )
     m_map = {r["folder"]: r for r in monthly_df.to_dicts()}
 
     epochs = [

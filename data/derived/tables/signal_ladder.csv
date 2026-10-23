@@ -1,0 +1,10 @@
+stage,states,pct_of_all_states
+All decision states,36292507,100.0
+≥1 cycle > 0 at naive MID prices,35642984,98.21031101543907
+≥1 cycle > 0 at executable BID/ASK (gross),1987003,5.474967601439052
+"… with every leg's quote ≤ 5,000 ms old",1981490,5.459777138019151
+"… with every leg's quote ≤ 2,000 ms old",1794091,4.943419863499647
+"… with every leg's quote ≤ 1,000 ms old",1554620,4.283583936485843
+… with every leg's quote ≤ 500 ms old,1235797,3.4051023259429285
+… with every leg's quote ≤ 250 ms old,872310,2.4035539898084197
+… with every leg's quote ≤ 100 ms old,444413,1.2245310030525034

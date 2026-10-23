@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from pathlib import Path
+from itertools import permutations
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
@@ -46,16 +47,24 @@ class ExecutionEngine:
                 edges[(v, u)] = (1.0 / ask) * (1.0 - fee) * (1.0 - slip)
         return edges
 
-def find_best_naive_cycle(edges_dict):
-    """Hardcoded check for the 2 possible triangles to find the highest theoretical mid-price yield."""
-    # Cycle 1: EUR(0) -> GBP(1) -> USD(2) -> EUR(0)
-    c1 = edges_dict[(0,1)] * edges_dict[(1,2)] * edges_dict[(2,0)]
-    # Cycle 2: EUR(0) -> USD(2) -> GBP(1) -> EUR(0)
-    c2 = edges_dict[(0,2)] * edges_dict[(2,1)] * edges_dict[(1,0)]
-    
-    if c1 > 1.0 and c1 > c2: return [0, 1, 2, 0], c1
-    if c2 > 1.0: return [0, 2, 1, 0], c2
-    return None, 0.0
+def find_best_naive_cycle(edges_dict, num_currencies):
+    """Search every simple three-currency cycle for the best mid-price yield."""
+    best_cycle = None
+    best_yield = 1.0
+
+    for u, v, w in permutations(range(num_currencies), 3):
+        if (u, v) not in edges_dict or (v, w) not in edges_dict or (w, u) not in edges_dict:
+            continue
+        cycle_yield = (
+            edges_dict[(u, v)]
+            * edges_dict[(v, w)]
+            * edges_dict[(w, u)]
+        )
+        if cycle_yield > best_yield:
+            best_cycle = [u, v, w, u]
+            best_yield = cycle_yield
+
+    return best_cycle, best_yield
 
 def run_latency_simulation():
     df = pd.read_parquet(GRID_FILE)
@@ -70,7 +79,7 @@ def run_latency_simulation():
         
         # 1. Look for a theoretical signal at time t
         mid_edges_t = engine.get_mid_price_edges(row_t)
-        cycle, theoretical_yield = find_best_naive_cycle(mid_edges_t)
+        cycle, theoretical_yield = find_best_naive_cycle(mid_edges_t, len(CURRENCIES))
         
         if cycle:
             expected_profit_bps = (theoretical_yield - 1.0) * 10000
@@ -80,16 +89,35 @@ def run_latency_simulation():
             
             realized_yield = 1.0
             failed_execution = False
+            filled_edges = []
             for i in range(len(cycle) - 1):
                 edge = (cycle[i], cycle[i+1])
                 if edge in inst_edges_t1:
                     realized_yield *= inst_edges_t1[edge]
+                    filled_edges.append(edge)
                 else:
                     failed_execution = True
                     break
             
             if failed_execution:
-                realized_bps = -5.0 # Severe penalty for a broken leg (inventory risk)
+                unwind_factor = realized_yield
+                for u, v in reversed(filled_edges):
+                    base, quote = engine.idx_to_c[u], engine.idx_to_c[v]
+                    reverse_rate = None
+                    for pair in engine.pairs:
+                        pair_base, pair_quote = pair[:3], pair[3:]
+                        if (pair_base, pair_quote) == (base, quote):
+                            reverse_rate = row_t1[f"{pair}_ask"]
+                            reverse_rate = 1.0 / reverse_rate
+                            break
+                        if (pair_base, pair_quote) == (quote, base):
+                            reverse_rate = row_t1[f"{pair}_bid"]
+                            break
+                    if reverse_rate is None:
+                        unwind_factor = 0.0
+                        break
+                    unwind_factor *= reverse_rate
+                realized_bps = (unwind_factor - 1.0) * 10000
             else:
                 realized_bps = (realized_yield - 1.0) * 10000
                 
