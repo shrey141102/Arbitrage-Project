@@ -1,0 +1,6 @@
+method,microseconds_per_state
+"vectorised scanner, cycles up to 3 legs (20 cycles)",0.20508419233139116
+"vectorised scanner, cycles up to 4 legs (54 cycles)",0.2281355078924786
+"vectorised scanner, cycles up to 5 legs (90 cycles)",0.3901746881316708
+pure-python loop over all 90 cycles,18.36263962710897
+"Bellman-Ford (V=8, E=30)",8.356526959687471

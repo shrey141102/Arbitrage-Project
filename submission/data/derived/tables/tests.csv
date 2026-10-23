@@ -1,0 +1,15 @@
+test,result,detail
+T1 known triangle is found,PASS,"cycle = ['EUR', 'GBP', 'USD', 'EUR']"
+T1 recovered return equals the constructed 2.5 bps,PASS,2.500000000 bps
+T2 fee model matches (1+g)(1-f)^3 - 1,PASS,2.199928001 vs 2.199928001 bps
+T3 no-arbitrage market returns None,PASS,""
+T4 single pair returns None,PASS,""
+P1 random graphs include both arbitrage and no-arbitrage cases,PASS,463/800 contain an arbitrage
+P1 Bellman-Ford agrees with brute force on whether an arbitrage exists,PASS,800/800 agree
+P1 every cycle Bellman-Ford returns really has a positive return,PASS,0 bad cycles
+P2 hop-limited DP (3 legs) equals the brute-force minimum weight,PASS,800/800
+"P2 hop-limited DP (4 legs) equals min(best 4-cycle, 2 x cheapest round trip)",PASS,800/800
+X1 polars cycle returns equal an independent pure-python calculation,PASS,"max |diff| = 0.00e+00 bps over 217,570 (state, cycle) values"
+X1 Bellman-Ford never misses a profitable enumerated cycle,PASS,0 misses in 3000 real states
+X1 every extra Bellman-Ford detection is longer than MAX_HOPS (or below 1e-6 bps),PASS,"0 extra detections, 0 explained"
+X2 scanner signal and fill returns equal a raw-tick recomputation (fills use only ticks before T+L),PASS,"2,100 (candidate, latency) values on 20210621; max relative error 5.4e-08; age mismatches 0"

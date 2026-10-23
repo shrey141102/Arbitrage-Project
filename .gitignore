@@ -16,13 +16,13 @@ kaggle.json
 .env
 
 # Data: too big for git (the notebook rebuilds the snapshot from the Kaggle files)
-data/kaggle/
-data/raw/
-data/snapshot/
+/data/kaggle/
+/data/raw/
+/data/snapshot/
 *.parquet
+!submission/**/*.parquet
 
 # Local-only
-submission/
 *.zip
 
 # Old charts and outputs kept on disk only (they contradict the final results)

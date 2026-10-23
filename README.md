@@ -23,7 +23,7 @@ Kaggle FX tick data (originally from Dukascopy): https://www.kaggle.com/datasets
    (Or put an existing snapshot in `data/snapshot/` and leave it as it is.)
 3. Run `notebook.ipynb` from top to bottom.
 
-The snapshot is about 1 GB, so it is not stored in this repo.
+The snapshot is about 1 GB. A copy is in `submission/data/snapshot/`, so you can copy it to `data/snapshot/` and skip the Kaggle download.
 
 ## Files
 
@@ -31,6 +31,7 @@ The snapshot is about 1 GB, so it is not stored in this repo.
 - `report.pdf`: the written report (methodology, results, pitfall checklist, reflection).
 - `data/README.md`: what is in the data folder.
 - `data/derived/`: the results the notebook writes (`results.json`, `key_results.md`, tables and figures).
+- `submission/`: the exact files I handed in (report, notebook, and the data folder with the snapshot, derived results and the small Dukascopy depth files).
 - `legacy/`: earlier exploratory scripts, tests and notes. They are NOT the final results. Do not use their numbers.
 
 ## AI tools
